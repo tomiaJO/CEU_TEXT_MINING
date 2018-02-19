@@ -16,6 +16,8 @@ library(tidytext)
 library(gutenbergr)
 
 library(dplyr)
+library(ggplot2)
+library(gridExtra)
 
 ```
 
@@ -45,6 +47,77 @@ TF-IDF creates a score for how important a word is in a document. Technically, i
   
 Sometimes looking at individual words could be misleading to understand the whole document - a good example is to think of negating word combinations, like "That was not smart", which might seem a positive statement if we score it only based on single words, as "smart" is likely scored positively.  
 
-#### 7. Pick two or more authors that you are familiar with, download their texts using the gutenbergr package, and do a basic analysis of word frequencies and TF-IDF
+#### 7. Pick two or more authors that you are familiar with, download their texts using the gutenbergr package, and do a basic analysis of word frequencies and TF-IDF  
+  
+  
+First step is to just get the ids of books for two authors:
+```{r}
+arthur_conan_doyle_ids <- gutenberg_works(author == "Doyle, Arthur Conan")[["gutenberg_id"]]
 
+victor_hugo_ids <- gutenberg_works(author == "Hugo, Victor" & language == "en")[["gutenberg_id"]]
+```
+  
+  
+Then proceeding to download the respective books:
+```{r}
+arthur_conan_doyle <- gutenberg_download(arthur_conan_doyle_ids)
+victor_hugo <- gutenberg_download(victor_hugo_ids)
+```
+  
+  
+In the next step two things are combined: unnesting the text column to words, and in the same step removing the useless ones (stopwords).
+_Note: "de" was added to the stop words list based on its frequency in Hugo's works, as likely it just appears in French names without any added meaning_
+```{r}
+data(stop_words)
+stop_words <- rbind(stop_words, data.frame(word = "de", lexicon = "custom"))
+
+tidy_acd_books <- arthur_conan_doyle %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+
+
+tidy_vh_books <- victor_hugo %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+```
+  
+  
+Let's visualize the most common words for both authors ( _note: I checked before, words we removed in the antijoin step earlier indeed looked like garbage for the purposes of text analysis_ )
+```{r, fig.width=12, fig.height=6, fig.align='center'}
+p1 <- tidy_acd_books %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 2500) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) + geom_col() + xlab(NULL) + coord_flip() + 
+  labs(title = "Most frequent words in the works of Arthur Conan Doyle", 
+       subtitle = "Filtered for words appearing at least 2500 times,\nafter removing stopwords")
+
+p2 <- tidy_vh_books %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 1250) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) + geom_col() + xlab(NULL) + coord_flip() + 
+  labs(title = "Most frequent words in the works of Victor Hugo", 
+       subtitle = "Filtered for words appearing at least 1250 times,\nafter removing stopwords")
+
+grid.arrange(p1, p2, ncol = 2)
+```
+  
+    
+Maybe not suprisingly, many of the most frequent words are shared among the two authors - think of "time", "eyes", etc. We'll explore commonalities further in next steps.   
+  
+```{r}
+frequency <- bind_rows(mutate(tidy_acd_books, author = "Arthur Conan Doyle"),
+                       mutate(tidy_vh_books, author = "Victor Hugo")) %>% 
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(author, proportion) %>% 
+  gather(author, proportion, `Arthur Conan Doyle`:`Victor Hugo`)
+
+frequency %>%
+  ggplot()
+```
 
