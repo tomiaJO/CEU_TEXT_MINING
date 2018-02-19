@@ -1,0 +1,50 @@
+---
+title: "Data Science on Unstructured Text Data - Quiz 2"
+author: "Tamas Koncz"
+date: '2018-02-19'
+output:
+  html_document:
+    df_print: paged
+  html_notebook:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r, message=FALSE, include=FALSE}
+library(tidyverse)
+library(tidytext)
+library(gutenbergr)
+
+library(dplyr)
+
+```
+
+
+#### 1. Explain in your words what the unnest_token function does  
+  
+Given a data.frame, it splits up a define column into pieces - for our purpose of text mining, it will break a string vector into words. (Instead of words, it could also do ngrams, sentences etc.) The result will be organized in the long format, with not-impacted column data being replicated for each row.  
+  
+
+#### 2. Explain your words what the gutenbergr package does  
+
+gutenbergr is an R API for the public domain collection of Project Gutenberg (~centralizing all books no longer under copyright restrictions). gutenbergr data also includes information of the works, and text is likely stripped of unncessary parts (e.g. page number).  
+
+#### 3. Explain in your words how sentiment lexicon work  
+
+Sentiment lexicons are just mapping files for words (or ngrams, combination of words) to a respective sentiment score. This score can be of different granularity - just positive/negative, or a number scale, or even categorical (e.g. "anger/joy/...").  
+
+#### 4. How does inner_join provide sentiment analysis functionality  
+  
+We connect our text dataset (assuming it's already tidy) to the sentiment lexicon by inner_join - which will result in only the words that are in both datasets. Now, we have a sentiment score for all the remaining words in our text.  
+
+#### 5. Explain in your words what tf-idf does  
+  
+TF-IDF creates a score for how important a word is in a document. Technically, it is based on weighting the word by the times it appears, divided by a term for it's general frequency. (So words that appear many times, but are very general, will get lower scores, while "special" word to the text will have higher scores)  
+
+#### 6. Explain why you may want to do tokenization by bigram  
+  
+Sometimes looking at individual words could be misleading to understand the whole document - a good example is to think of negating word combinations, like "That was not smart", which might seem a positive statement if we score it only based on single words, as "smart" is likely scored positively.  
+
+#### 7. Pick two or more authors that you are familiar with, download their texts using the gutenbergr package, and do a basic analysis of word frequencies and TF-IDF
+
+
