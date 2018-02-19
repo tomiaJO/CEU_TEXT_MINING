@@ -106,7 +106,7 @@ grid.arrange(p1, p2, ncol = 2)
     
 Maybe not suprisingly, many of the most frequent words are shared among the two authors - think of "time", "eyes", etc. We'll explore commonalities further in next steps.   
   
-```{r}
+```{r, fig.width=6, fig.height=5, fig.align='center'}
 frequency <- bind_rows(mutate(tidy_acd_books, author = "Arthur Conan Doyle"),
                        mutate(tidy_vh_books, author = "Victor Hugo")) %>% 
   mutate(word = str_extract(word, "[a-z']+")) %>%
@@ -117,7 +117,24 @@ frequency <- bind_rows(mutate(tidy_acd_books, author = "Arthur Conan Doyle"),
   spread(author, proportion) %>% 
   gather(author, proportion, `Arthur Conan Doyle`:`Victor Hugo`)
 
+f_cor <- frequency %>%
+  spread(key= author, value= proportion)
+
+cor_est <- cor.test(x= f_cor$`Arthur Conan Doyle`, y= f_cor$`Victor Hugo`)$estimate
+
 frequency %>%
-  ggplot()
-```
+  spread(key= author, value= proportion) %>%
+  ggplot(aes(`Arthur Conan Doyle`, `Victor Hugo`)) + geom_point(alpha= .1) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  labs(title= "Comparing word frequencies between the two authors",
+       subtitle= paste("Correlation strength:", round(cor_est, digits=4), sep=" ")) +
+  geom_text(aes(label= word), check_overlap= TRUE)
+
+```  
+  
+  
+The above visualization of the joint-distribution of word frequencies between the two authors should not carry much surpirse either - many of the noted words above with similar frequencies.  
+Some of the words where we see a big difference are related to either the British culture ("sir", "dear", "british") or to tematics of Victor Hugo's work ("paris", "jean", "child").  
+Even if the results are not much news, it's still nice to see things quantified and visualized!  
+
 
