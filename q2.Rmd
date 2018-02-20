@@ -65,18 +65,24 @@ victor_hugo <- gutenberg_download(victor_hugo_ids)
 ```
   
   
-In the next step two things are combined: unnesting the text column to words, and in the same step removing the useless ones (stopwords).
+In the next step two things are combined: unnesting the text column to words, and in the same step removing the useless ones (stopwords). We also add a column, line number.
 _Note: "de" was added to the stop words list based on its frequency in Hugo's works, as likely it just appears in French names without any added meaning_
 ```{r}
 data(stop_words)
 stop_words <- rbind(stop_words, data.frame(word = "de", lexicon = "custom"))
 
 tidy_acd_books <- arthur_conan_doyle %>%
+  group_by(gutenberg_id) %>%
+  mutate(linenumber = row_number()) %>%
+  ungroup() %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words)
 
 
 tidy_vh_books <- victor_hugo %>%
+  group_by(gutenberg_id) %>%
+  mutate(linenumber = row_number()) %>%
+  ungroup() %>%
   unnest_tokens(word, text) %>%
   anti_join(stop_words)
 ```
@@ -136,5 +142,38 @@ frequency %>%
 The above visualization of the joint-distribution of word frequencies between the two authors should not carry much surpirse either - many of the noted words above with similar frequencies.  
 Some of the words where we see a big difference are related to either the British culture ("sir", "dear", "british") or to tematics of Victor Hugo's work ("paris", "jean", "child").  
 Even if the results are not much news, it's still nice to see things quantified and visualized!  
+
+The last analysis I'll perform is a comparison of these authors based on the sentiment of their works.  
+  
+  
+  
+
+Let's get started by creating a set for both enhanced with sentiment scores from the AFFIN lexicon:  
+
+```{r}
+tidy_acd_books <- tidy_acd_books %>%
+  inner_join(get_sentiments("afinn")) %>%
+  mutate(author = "Arthur Conan Doyle")
+
+tidy_vh_books <- tidy_vh_books %>%
+  inner_join(get_sentiments("afinn")) %>%
+  mutate(author = "Victor Hugo")
+```
+
+
+```{r}
+tidy_vh_books %>%
+  group_by(gutenberg_id, word) %>%
+  mutate(word_count = n()) %>%
+  ungroup() %>%
+  filter(word_count >= 100) %>%
+  mutate(word = reorder(word, word_count)) %>%
+  ggplot(aes(word, word_count * score, fill = score)) + 
+    geom_col(show.legend = FALSE) + 
+    labs(y = "Contribution to sentiment", x = NULL) + 
+    coord_flip() + 
+    facet_grid(~gutenberg_id)
+```
+
 
 
