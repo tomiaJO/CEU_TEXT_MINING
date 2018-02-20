@@ -19,6 +19,8 @@ library(dplyr)
 library(ggplot2)
 library(gridExtra)
 
+knitr::opts_chunk$set(message = FALSE)
+
 ```
 
 
@@ -65,7 +67,7 @@ victor_hugo <- gutenberg_download(victor_hugo_ids)
 ```
   
   
-In the next step two things are combined: unnesting the text column to words, and in the same step removing the useless ones (stopwords). We also add a column, line number.
+In the next step two things are combined: unnesting the text column to words, and in the same step removing the useless ones (stopwords). Also adding a column, line number.
 _Note: "de" was added to the stop words list based on its frequency in Hugo's works, as likely it just appears in French names without any added meaning_
 ```{r}
 data(stop_words)
@@ -139,7 +141,7 @@ frequency %>%
 ```  
   
   
-The above visualization of the joint-distribution of word frequencies between the two authors should not carry much surpirse either - many of the noted words above with similar frequencies.  
+The above visualization of the joint-distribution of word frequencies between the two authors should not carry much surpirse either - many of the noted words above appear with similar frequencies.  
 Some of the words where we see a big difference are related to either the British culture ("sir", "dear", "british") or to tematics of Victor Hugo's work ("paris", "jean", "child").  
 Even if the results are not much news, it's still nice to see things quantified and visualized!  
 
@@ -148,7 +150,7 @@ The last analysis I'll perform is a comparison of these authors based on the sen
   
   
 
-Let's get started by creating a set for both enhanced with sentiment scores from the AFFIN lexicon:  
+Let's get started by creating a tidy dataset for both enhanced with sentiment scores from the AFFIN lexicon:  
 
 ```{r}
 tidy_acd_books <- tidy_acd_books %>%
@@ -161,19 +163,82 @@ tidy_vh_books <- tidy_vh_books %>%
 ```
 
 
-```{r}
-tidy_vh_books %>%
-  group_by(gutenberg_id, word) %>%
-  mutate(word_count = n()) %>%
+```{r, fig.width=12, fig.height=6, fig.align='center'}
+p1 <- tidy_acd_books %>%
+  mutate(total_count = n()) %>%
+  group_by(word) %>% 
+  summarise(sentiment = mean(score), 
+            word_count = n(), 
+            word_count_ratio = n() / mean(total_count)) %>%
   ungroup() %>%
-  filter(word_count >= 100) %>%
+  mutate(rank = dense_rank(desc(word_count))) %>%
+  filter(rank <= 15) %>%
   mutate(word = reorder(word, word_count)) %>%
-  ggplot(aes(word, word_count * score, fill = score)) + 
+  ggplot(aes(word, sentiment * word_count_ratio, fill = sentiment >= 0)) + 
     geom_col(show.legend = FALSE) + 
-    labs(y = "Contribution to sentiment", x = NULL) + 
-    coord_flip() + 
-    facet_grid(~gutenberg_id)
+    labs(title= "Most frequent words contributing to sentiment", 
+         subtitle = "Arthur Conan Doyle",
+         y = "Contribution to sentiment", x = NULL) + 
+    coord_flip()
+
+p2 <- tidy_vh_books %>%
+  mutate(total_count = n()) %>%
+  group_by(word) %>% 
+  summarise(sentiment = mean(score), 
+            word_count = n(), 
+            word_count_ratio = n() / mean(total_count)) %>%
+  ungroup() %>%
+  mutate(rank = dense_rank(desc(word_count))) %>%
+  filter(rank <= 15) %>%
+  mutate(word = reorder(word, word_count)) %>%
+  ggplot(aes(word, sentiment * word_count_ratio, fill = sentiment >= 0)) + 
+    geom_col(show.legend = FALSE) + 
+    labs(title= "Most frequent words contributing to sentiment", 
+         subtitle = "Victor Hugo",
+         y = "Contribution to sentiment", x = NULL) +
+    coord_flip()
+
+grid.arrange(p1, p2, ncol = 2)
 ```
 
 
+For both authors, among most common words negative sentiment seems to be dominating - this is even true if we recognize that some words (like "dear") might not carry real sentiment, and are rather just part of common language used by the author.  
+Although my knowledge of these works are limited, based on the few books I read in the collection I believe the above make sense - for example, 'Les Miserables' is dominated by fighting against all odds, and trying to hang on to hope.  
+  
+Talking of hope - an important aspect of sentiment is not just its aggregate, but how it builds up across a book! 
+
+```{r, fig.width=12, fig.height=10, fig.align='center'}
+p1 <- tidy_acd_books %>%
+  filter(gutenberg_id %in% 1661) %>%
+  mutate(linenumber = row_number()) %>%
+  group_by(author, index = linenumber %/% 80) %>% 
+  summarise(sentiment = sum(score)) %>%
+  ggplot(aes(x=index, y = sentiment, fill = sentiment >= 0)) +
+    geom_bar(stat="identity") +
+    labs(title="Sentiment dynamics in 'The Adventures of Sherlock Holmes'") + 
+    theme(legend.position="none")
+
+p2 <- tidy_vh_books %>%
+  filter(gutenberg_id %in% 48731:48735) %>% ##the books is divided to five parts
+  mutate(linenumber = row_number()) %>%
+  group_by(author, index = linenumber %/% 80) %>% 
+  summarise(sentiment = sum(score)) %>%
+  ggplot(aes(x=index, y = sentiment, fill = sentiment >= 0)) +
+    geom_bar(stat="identity") +
+    labs(title="Sentiment dynamics in 'Les Miserables'") + 
+    theme(legend.position="none")
+  
+grid.arrange(p1, p2, ncol=1)
+```
+
+Above I plotted aggregate sentiment scores across maybe the two most notable books by the authors.  
+What is interesting that both are carrying the negative sentiment across most of the works, with some spikes of positivity.  
+Does this make sense?  
+- For 'Les Miserables', I certainly think so. Let's consider the ending, which is mostly positive but there is a negative part as well. In the book, Jean Valjean dies at the end, preceded by a happy wedding. Even though the ending is "happy", there is still a lot of drama involved.
+- 'The Adventures of Sherlock Holmes' is actually a collection of shorter stories, which definitely has some impact on general dynamics. The stories are also written from a special perspective (Watson's). Although I think painting these stories as being dominated by negative sentiment is misleading, I can understand why we see these results - the topic is focused around crime investigation, social injustice, etc.  
+  
+What is my take-away from this? In one sentence: if we are after analyzing sentiments of a very (narrowly) thematical writing, we better be prepared with a specialized sentiment lexicon as well.  
+  
+Now that we understand that the works of A.C.D. and V.Hugo share some shared characteristic on the high level (most common words, sentiments), it's time to look at the differences.  
+A great way of achieving this is by TF-IDF analysis, which should help us find the 'most descriptive' words for each document.
 
