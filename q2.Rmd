@@ -240,5 +240,77 @@ Does this make sense?
 What is my take-away from this? In one sentence: if we are after analyzing sentiments of a very (narrowly) thematical writing, we better be prepared with a specialized sentiment lexicon as well.  
   
 Now that we understand that the works of A.C.D. and V.Hugo share some shared characteristic on the high level (most common words, sentiments), it's time to look at the differences.  
-A great way of achieving this is by TF-IDF analysis, which should help us find the 'most descriptive' words for each document.
+A great way of achieving this is by TF-IDF analysis, which should help us find the 'most descriptive' words for each document.  
+  
+```{r}
+tidy_acd_books_2 <- arthur_conan_doyle %>%
+  mutate(author = "Arthur Conan Doyle") %>%
+  group_by(gutenberg_id) %>%
+  mutate(linenumber = row_number()) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+
+tidy_vh_books_2 <- victor_hugo %>%
+  mutate(author = "Victor Hugo") %>%
+  group_by(gutenberg_id) %>%
+  mutate(linenumber = row_number()) %>%
+  ungroup() %>%
+  unnest_tokens(word, text) 
+
+book_words <- bind_rows(tidy_acd_books, tidy_vh_books) %>%
+  mutate(book = ifelse(gutenberg_id == 1661, "The Adventures of Sherlock Holmes", gutenberg_id)) %>%
+  mutate(book = ifelse(book %in% 48731:48735, "Les Miserables", book)) %>%    
+  mutate(word = ifelse(word=="riots", "riot", word)) %>%
+  count(author, book, word, sort = TRUE) %>%
+  ungroup() %>%
+  bind_tf_idf(word, book, n)
+
+
+book_words_2 <- bind_rows(tidy_acd_books_2, tidy_vh_books_2) %>%
+  mutate(book = ifelse(gutenberg_id == 1661, "The Adventures of Sherlock Holmes", gutenberg_id)) %>%
+  mutate(book = ifelse(book %in% 48731:48735, "Les Miserables", book)) %>%    
+  mutate(word = ifelse(word=="riots", "riot", word)) %>%
+  count(author, book, word, sort = TRUE) %>%
+  ungroup() %>%
+  bind_tf_idf(word, book, n)
+```
+  
+  
+Visualizing the results (only for the two books we examined earlier):
+```{r, fig.height=8, fig.width=12, fig.align='center'}
+p1 <- book_words %>%
+  filter(book %in% c("The Adventures of Sherlock Holmes", "Les Miserables")) %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>% 
+  group_by(book) %>% 
+  top_n(10) %>% 
+  ungroup %>%
+  ggplot(aes(word, tf_idf, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Only words with sentiment scores", x = NULL, y = "tf-idf") +
+  facet_wrap(~book, ncol = 2, scales = "free") +
+  coord_flip()
+
+p2 <- book_words_2 %>%
+  filter(book %in% c("The Adventures of Sherlock Holmes", "Les Miserables")) %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>% 
+  group_by(book) %>% 
+  top_n(10) %>% 
+  ungroup %>%
+  ggplot(aes(word, tf_idf, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  labs(title="Without word filtering", x = NULL, y = "tf-idf") +
+  facet_wrap(~book, ncol = 2, scales = "free") +
+  coord_flip()
+
+grid.arrange(p2, p1, ncol = 1)
+```
+
+So what can we see here?  
+Not surprisingly, TF-IDF will score names and places the highest - after all, these are generally the most unique words to a book.  
+  
+  
+I've also run the same code, but this time only words which were included in the sentiment lexicon were part of the analysis (note the impact of the inner_join). This will leave out all "special words" like the above, and we actually get a good list of most descriptive "common" words.
+_(Note: this method is definitely **not** something I'd advise on I just used it for an illustrative example coming very "cheaply". A more proper way would be to customize the stop word collection for our purpose, something I'll not do here.)_
 
