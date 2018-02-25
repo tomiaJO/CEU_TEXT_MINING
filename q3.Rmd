@@ -11,19 +11,105 @@ output:
 ---
 
 ```{r, message=FALSE, include=FALSE}
+knitr::opts_chunk$set(message = FALSE)
+
 library(tidyverse)
 library(tidytext)
 library(gutenbergr)
+library(topicmodels)
 
 library(dplyr)
 library(ggplot2)
 library(gridExtra)
-
-knitr::opts_chunk$set(message = FALSE)
 ```
 
-#### 1. In your own words describe LDA
+#### 1. In your own words describe LDA  
 
-#### 2. In your own words, describe the process of a full tidy text analysis
+I look at LDA as the cluster analysis for textual documents.  
+In essence, it treats documents as being a mix of different (not too many) topics, and these topics are in turn a mix of words. It helps us find (~"cluster") the descriptive words for a topic, and the descriptive words for a topic.  
+  
 
-#### 3. Do a short tidy text analysis where you extract topics, explain why they are good or bad.
+#### 2. In your own words, describe the process of a full tidy text analysis  
+  
+First step is unnesting tokens (words/ngrams) from the original text - creating a 1 token /row dataset. This can be massaged further (e.g. applying stopwords) to arrive at a tidy text format for our analysis.  
+Analysis is generally based on some type of word-count-summary analysis, either relative (TF-IDF) or absolute  (sentiment analysis).  
+Analysis is an iterative process - there can be always reasons to step back, and rerun results (e.g. adding new stop words that were uncovered).  
+As a good practice, last step should be visualizing results for the ease of understanding.  
+  
+#### 3. Do a short tidy text analysis where you extract topics, explain why they are good or bad.  
+  
+I'll use the same books from quiz 2, Arthur Conan Doyle's "The Adventures of Sherlock Holmes" and Victor Hugo's Les Miserables.
+```{r}
+arthur_conan_doyle <- gutenberg_download(1661)
+victor_hugo <- gutenberg_download(48731:48735)
+```
+
+```{r}
+data(stop_words)
+stop_words <- rbind(stop_words, data.frame(word = "de", lexicon = "custom"))
+
+tidy_acd_books <- arthur_conan_doyle %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  mutate(author = "ACD") %>%
+  mutate(book = "The Adventures of Sherlock Holmes")
+
+
+tidy_vh_books <- victor_hugo %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  mutate(author = "VH") %>%
+  mutate(book = "Les Miserables")
+```
+```{r}
+books_td <- bind_rows(tidy_acd_books, tidy_vh_books) %>%
+              count(book, word) %>%
+              arrange(desc(n))
+
+books_dtm <- books_td %>%
+              cast_dtm(book, word, n)
+```
+
+Let's run an LDA analysis with 2 topics (seed = 93, for reproducible results):  
+```{r}
+books_lda <- books_dtm %>%
+                LDA(k = 2, control = list(seed = 93))
+```
+
+```{r}
+books_topics <- tidy(books_lda, matrix = "beta")
+
+books_top_terms <- books_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+books_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+```{r}
+beta_spread <- books_topics %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  spread(topic, beta) %>%
+  filter(topic1 > .001 | topic2 > .001) %>%
+  mutate(log_ratio = log2(topic2 / topic1))
+
+top5 <- beta_spread %>%
+  top_n(10, log_ratio)
+bottom5 <- beta_spread %>%
+  top_n(-10, log_ratio)
+
+bind_rows(top5, bottom5) %>%
+  mutate(term = reorder(term, log_ratio)) %>%
+  ggplot(aes(x=term, y=log_ratio)) + 
+    geom_bar(stat="identity") +
+    coord_flip()
+```
+
+  
