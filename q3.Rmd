@@ -17,6 +17,7 @@ library(tidyverse)
 library(tidytext)
 library(gutenbergr)
 library(topicmodels)
+library(stringr)
 
 library(dplyr)
 library(ggplot2)
@@ -43,7 +44,10 @@ I'll use the same books from quiz 2, Arthur Conan Doyle's "The Adventures of She
 arthur_conan_doyle <- gutenberg_download(1661)
 victor_hugo <- gutenberg_download(48731:48735)
 ```
-
+  
+  
+  
+Unnesting words:
 ```{r}
 data(stop_words)
 stop_words <- rbind(stop_words, data.frame(word = "de", lexicon = "custom"))
@@ -61,6 +65,10 @@ tidy_vh_books <- victor_hugo %>%
   mutate(author = "VH") %>%
   mutate(book = "Les Miserables")
 ```
+  
+  
+LDA needs a DocumentTermMatrix for an imput, so let's create one:  
+
 ```{r}
 books_td <- bind_rows(tidy_acd_books, tidy_vh_books) %>%
               count(book, word) %>%
@@ -70,12 +78,15 @@ books_dtm <- books_td %>%
               cast_dtm(book, word, n)
 ```
 
-Let's run an LDA analysis with 2 topics (seed = 93, for reproducible results):  
+Running LDA analysis with 2 topics (seed = 93, for reproducible results):  
 ```{r}
 books_lda <- books_dtm %>%
                 LDA(k = 2, control = list(seed = 93))
 ```
-
+  
+  
+  
+We can visualize per-topic-per-word probabilities (top10 for both):
 ```{r}
 books_topics <- tidy(books_lda, matrix = "beta")
 
@@ -90,8 +101,13 @@ books_top_terms %>%
   ggplot(aes(term, beta, fill = factor(topic))) +
   geom_col(show.legend = FALSE) +
   facet_wrap(~ topic, scales = "free") +
-  coord_flip()
+  coord_flip() +
+  labs(title= "Words with biggest probability of belonging to a topic")
 ```
+The above results make sense. Names (which are very unique to the books in this case, so the algorithm had an easy job) more-or-less match up with other specific words.  
+Note the overlap in "day" - this is normal for LDA, as the overlap for textual document terms is not suprising - something that makes it different to regular clustering.  
+  
+It's also possible to visualize the words with the biggest probability difference in belonging to one topic or the other:  
 
 ```{r}
 beta_spread <- books_topics %>%
@@ -109,7 +125,16 @@ bind_rows(top5, bottom5) %>%
   mutate(term = reorder(term, log_ratio)) %>%
   ggplot(aes(x=term, y=log_ratio)) + 
     geom_bar(stat="identity") +
-    coord_flip()
+    coord_flip() +
+    labs(title= "Words with biggest probability differences",
+         subtitle = "As captured by the log(prob_topic1/prob_topic2) ratio")
 ```
 
   
+Again, results make sense - there is not much challange here, as the names dominate (they were not removed from the dataset), so this is rather a demonstration of the algorithm's power.  
+  
+An intersting extension of this analysis would be to run the analysis on the twelve short stories of "The Adventures of Sherlock Holmes", and see how much it is able to pick up the separate storylines, when much of the people, places, etc. are shared.  
+  
+If I update the document to contain that analysis as well, it will be marked clearly with an updated date.
+
+
